@@ -359,7 +359,7 @@ export const SellerDashboard = () => {
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gross Revenue</p>
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-                  ${sellerStats.totalRevenue.toFixed(2)}
+                  ${(Number(sellerStats.totalRevenue) || 0).toFixed(2)}
                 </h3>
               </div>
             </div>
@@ -413,7 +413,7 @@ export const SellerDashboard = () => {
                       <td className="py-3.5 px-4 font-mono text-amber-400">{tx.id}</td>
                       <td className="py-3.5 px-4">{tx.date}</td>
                       <td className="py-3.5 px-4 font-bold text-white">{tx.itemTitle}</td>
-                      <td className="py-3.5 px-4 font-extrabold text-emerald-400">${tx.amount.toFixed(2)}</td>
+                      <td className="py-3.5 px-4 font-extrabold text-emerald-400">${(Number(tx.amount) || 0).toFixed(2)}</td>
                       <td className="py-3.5 px-4">
                         <span className="px-2.5 py-1 rounded-full badge-emerald text-[11px] font-bold">
                           {tx.status}
@@ -486,7 +486,7 @@ export const SellerDashboard = () => {
                         {book.category}
                       </span>
                       <span className="text-xs font-bold text-emerald-400">
-                        ${book.price.toFixed(2)}
+                        ${(Number(book.price) || 0).toFixed(2)}
                       </span>
                       <span className="text-[11px] text-slate-400">
                         • {book.duration}

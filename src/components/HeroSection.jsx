@@ -93,10 +93,10 @@ export const HeroSection = () => {
               className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm border border-slate-700 hover:border-amber-500/50 transition-all shadow-md"
             >
               <ShoppingCart className="w-4 h-4 text-amber-400" />
-              <span>Buy Audiobook — ${featuredBook.price.toFixed(2)}</span>
+              <span>Buy Audiobook — ${(Number(featuredBook.price) || 0).toFixed(2)}</span>
               {featuredBook.originalPrice && (
                 <span className="text-xs text-slate-400 line-through ml-1">
-                  ${featuredBook.originalPrice.toFixed(2)}
+                  ${(Number(featuredBook.originalPrice) || 0).toFixed(2)}
                 </span>
               )}
             </button>

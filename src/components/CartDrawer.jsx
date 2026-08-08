@@ -109,7 +109,7 @@ export const CartDrawer = () => {
                     <p className="text-xs text-slate-400 truncate">By {item.author}</p>
                     <div className="mt-2 flex items-center justify-between">
                       <span className="font-extrabold text-sm text-white">
-                        ${item.price.toFixed(2)}
+                        ${(Number(item.price) || 0).toFixed(2)}
                       </span>
                       <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
                         {item.duration}

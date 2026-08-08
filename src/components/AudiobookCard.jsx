@@ -90,11 +90,11 @@ export const AudiobookCard = ({ book }) => {
         <div className="flex items-center justify-between pt-1">
           <div>
             <div className="text-lg font-extrabold text-white">
-              ${book.price.toFixed(2)}
+              ${(Number(book.price) || 0).toFixed(2)}
             </div>
             {book.originalPrice && (
               <div className="text-[11px] text-slate-500 line-through">
-                ${book.originalPrice.toFixed(2)}
+                ${(Number(book.originalPrice) || 0).toFixed(2)}
               </div>
             )}
           </div>
