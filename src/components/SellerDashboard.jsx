@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useStore } from '../context/StoreContext';
-import { parseAudioFileMetadata } from '../utils/audioMetadataParser';
+import { parseAudioFileMetadata, extract30SecAudioSampleWav } from '../utils/audioMetadataParser';
 import { saveAudioFile } from '../utils/audioStorage';
 import { CATEGORIES } from '../data/initialAudiobooks';
 import {
@@ -107,17 +107,11 @@ export const SellerDashboard = () => {
       const liveAudioUrl = meta.audioObjectUrl || URL.createObjectURL(file);
       setSampleAudioUrl(liveAudioUrl);
 
-      // Convert 1.5MB sample slice to persistent Base64 Data URL so audio survives all page reloads & home screen navigation
+      // Extract high-fidelity uncorrupted 30-second WAV Audio Sample Data URL
       try {
-        const audioDataUrl = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target.result);
-          reader.onerror = () => resolve(null);
-          const sampleSlice = file.slice(0, Math.min(file.size, 1024 * 1024 * 1.5));
-          reader.readAsDataURL(sampleSlice);
-        });
-        if (audioDataUrl) {
-          setSampleAudioUrl(audioDataUrl);
+        const persistentWavDataUrl = await extract30SecAudioSampleWav(file);
+        if (persistentWavDataUrl) {
+          setSampleAudioUrl(persistentWavDataUrl);
         }
       } catch (e) {
         console.warn('Persistent sample extraction notice:', e);
