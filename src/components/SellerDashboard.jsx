@@ -533,6 +533,37 @@ export const SellerDashboard = () => {
                     <Play className="w-4 h-4 fill-current" />
                   </button>
 
+                  <label
+                    className="p-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 cursor-pointer flex items-center gap-1.5 text-xs font-bold transition-colors"
+                    title="Attach MP3 Audio File"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Upload MP3</span>
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.m4b"
+                      className="hidden"
+                      onChange={async (e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          const file = e.target.files[0];
+                          showToast(`⏳ Extracting 30-sec audio sample from "${file.name}"...`, 'info');
+                          const meta = await parseAudioFileMetadata(file);
+                          const persistentWavDataUrl = await extract30SecAudioSampleWav(file);
+                          if (persistentWavDataUrl) {
+                            await saveAudioFile(book.id, file);
+                            updateAudiobookInCatalog(book.id, {
+                              sampleAudioUrl: persistentWavDataUrl,
+                              duration: meta.durationFormatted || book.duration,
+                            });
+                            showToast(`✨ Attached 30-sec preview sample to "${book.title}"!`, 'success');
+                          } else {
+                            showToast(`Unable to parse 30-sec sample from "${file.name}"`, 'error');
+                          }
+                        }
+                      }}
+                    />
+                  </label>
+
                   <button
                     onClick={() => setEditingBook({ ...book })}
                     className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5 transition-colors"
@@ -695,20 +726,18 @@ export const SellerDashboard = () => {
                       onChange={async (e) => {
                         if (e.target.files && e.target.files[0]) {
                           const file = e.target.files[0];
+                          showToast(`⏳ Extracting 30-sec audio sample...`, 'info');
                           const meta = await parseAudioFileMetadata(file);
-                          const audioDataUrl = await new Promise((resolve) => {
-                            const reader = new FileReader();
-                            reader.onload = (event) => resolve(event.target.result);
-                            reader.onerror = () => resolve(null);
-                            const audioSlice = file.slice(0, Math.min(file.size, 1024 * 1024 * 5));
-                            reader.readAsDataURL(audioSlice);
-                          });
-                          setEditingBook({
-                            ...editingBook,
-                            sampleAudioUrl: audioDataUrl || meta.audioObjectUrl,
-                            duration: meta.durationFormatted || editingBook.duration,
-                          });
-                          showToast(`🎵 Attached audio file: ${file.name}`, 'success');
+                          const persistentWavDataUrl = await extract30SecAudioSampleWav(file);
+                          if (persistentWavDataUrl) {
+                            await saveAudioFile(editingBook.id, file);
+                            setEditingBook({
+                              ...editingBook,
+                              sampleAudioUrl: persistentWavDataUrl,
+                              duration: meta.durationFormatted || editingBook.duration,
+                            });
+                            showToast(`🎵 Attached 30-sec audio sample: ${file.name}`, 'success');
+                          }
                         }
                       }}
                     />

@@ -12,8 +12,7 @@ export const StoreProvider = ({ children }) => {
     try {
       const saved = localStorage.getItem('audioverse_catalog');
       if (!saved) return INITIAL_AUDIOBOOKS;
-      const parsed = JSON.parse(saved);
-      return parsed.map((b) => (b.sampleAudioUrl && b.sampleAudioUrl.startsWith('data:') ? { ...b, sampleAudioUrl: '' } : b));
+      return parsed;
     } catch (e) {
       console.warn('LocalStorage parse error - safely restoring catalog:', e);
       try { localStorage.removeItem('audioverse_catalog'); } catch (_) {}
