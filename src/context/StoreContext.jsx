@@ -118,10 +118,15 @@ export const StoreProvider = ({ children }) => {
     isPlaying: false,
     currentTime: 0,
     duration: 0,
+    sampleStartTime: 0,
+    sampleEndTime: 0,
     playbackSpeed: 1.0,
     volume: 0.8,
     activeChapterIndex: 0,
   });
+
+  // Ref to track latest preview boundaries without causing useEffect re-attaches
+  const sampleBoundariesRef = useRef({ isSample: true, startTime: 0, endTime: 0 });
 
   // Global Audio HTML Element ref handler
   const [audioElement] = useState(new Audio());
@@ -132,17 +137,18 @@ export const StoreProvider = ({ children }) => {
 
     const handleTimeUpdate = () => {
       const current = audioElement.currentTime;
+      const { isSample, startTime, endTime } = sampleBoundariesRef.current;
 
       // 30-Second Sample Limit Check
-      if (playerState.isSample && playerState.sampleEndTime > 0 && current >= playerState.sampleEndTime) {
+      if (isSample && endTime > 0 && current >= endTime) {
         audioElement.pause();
         try {
-          audioElement.currentTime = playerState.sampleStartTime || 0;
+          audioElement.currentTime = startTime || 0;
         } catch (_) {}
         setPlayerState((prev) => ({
           ...prev,
           isPlaying: false,
-          currentTime: prev.sampleStartTime || 0,
+          currentTime: startTime || 0,
         }));
         showToast('⏱️ 30-second sample preview complete! Buy full audiobook for uninterrupted listening.', 'info');
         return;
@@ -166,7 +172,7 @@ export const StoreProvider = ({ children }) => {
       audioElement.removeEventListener('timeupdate', handleTimeUpdate);
       audioElement.removeEventListener('ended', handleEnded);
     };
-  }, [audioElement, playerState.isSample, playerState.sampleEndTime, playerState.sampleStartTime]);
+  }, [audioElement]);
 
   // Player Controls
   const playTrack = async (book, isSample = true) => {
@@ -197,9 +203,10 @@ export const StoreProvider = ({ children }) => {
         audioElement.pause();
         setPlayerState((prev) => ({ ...prev, isPlaying: false }));
       } else {
-        if (isSample && playerState.sampleEndTime > 0 && audioElement.currentTime >= playerState.sampleEndTime - 0.5) {
+        const { startTime, endTime } = sampleBoundariesRef.current;
+        if (isSample && endTime > 0 && audioElement.currentTime >= endTime - 0.5) {
           try {
-            audioElement.currentTime = playerState.sampleStartTime || 0;
+            audioElement.currentTime = startTime || 0;
           } catch (_) {}
         }
         audioElement.play().catch(console.error);
@@ -212,40 +219,70 @@ export const StoreProvider = ({ children }) => {
     audioElement.src = audioUrl;
     audioElement.load();
 
-    let startTime = 0;
-    let endTime = 30;
+    const computeAndStart = () => {
+      let startTime = 0;
+      let endTime = 30;
 
-    audioElement.play().then(() => {
       const dur = audioElement.duration;
-      if (isSample && dur && dur > 35) {
-        const maxStart = Math.max(0, Math.floor(dur) - 32);
-        startTime = maxStart > 5 ? Math.floor(Math.random() * maxStart) : 0;
-        endTime = startTime + 30;
-        try {
-          audioElement.currentTime = startTime;
-        } catch (_) {}
+      if (isSample) {
+        if (dur && !isNaN(dur) && dur > 5) {
+          if (dur > 35) {
+            const maxStart = Math.max(0, Math.floor(dur) - 32);
+            startTime = maxStart > 5 ? Math.floor(Math.random() * maxStart) : 0;
+            endTime = startTime + 30;
+          } else {
+            startTime = 0;
+            endTime = Math.min(30, Math.floor(dur));
+          }
+        } else {
+          startTime = 0;
+          endTime = 30;
+        }
+      } else {
+        startTime = 0;
+        endTime = 0;
       }
 
-      setPlayerState({
-        book,
-        isSample,
-        isPlaying: true,
-        currentTime: startTime,
-        sampleStartTime: startTime,
-        sampleEndTime: isSample ? endTime : 0,
-        duration: audioElement.duration || 0,
-        playbackSpeed: playerState.playbackSpeed,
-        volume: playerState.volume,
-        activeChapterIndex: 0,
-      });
+      sampleBoundariesRef.current = { isSample, startTime, endTime };
 
-      showToast(
-        isSample
-          ? `🎵 Playing 30-second sample for "${book.title}"`
-          : `▶ Playing full audiobook: "${book.title}"`,
-        'music'
-      );
-    });
+      try {
+        if (startTime > 0) {
+          audioElement.currentTime = startTime;
+        }
+      } catch (_) {}
+
+      audioElement.play().then(() => {
+        setPlayerState({
+          book,
+          isSample,
+          isPlaying: true,
+          currentTime: startTime,
+          sampleStartTime: startTime,
+          sampleEndTime: isSample ? endTime : 0,
+          duration: audioElement.duration || 0,
+          playbackSpeed: playerState.playbackSpeed,
+          volume: playerState.volume,
+          activeChapterIndex: 0,
+        });
+
+        showToast(
+          isSample
+            ? `🎵 Playing 30-second sample for "${book.title}"`
+            : `▶ Playing full audiobook: "${book.title}"`,
+          'music'
+        );
+      }).catch((err) => {
+        console.warn('Audio playback notice:', err);
+        showToast(`ℹ️ Unable to play audio for "${book.title}".`, 'info');
+      });
+    };
+
+    if (audioElement.readyState >= 1) {
+      computeAndStart();
+    } else {
+      audioElement.onloadedmetadata = computeAndStart;
+      audioElement.play().then(computeAndStart).catch(computeAndStart);
+    }
   };
 
   const togglePlayPause = () => {
