@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { INITIAL_AUDIOBOOKS } from '../data/initialAudiobooks';
 import { getAudioFile } from '../utils/audioStorage';
+import { db } from '../firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const StoreContext = createContext();
 
 export const StoreProvider = ({ children }) => {
-  // Catalog State (LocalStorage + Fail-Safe Fallback)
+  // Catalog State (Firestore Sync + LocalStorage Fallback)
   const [audiobooks, setAudiobooks] = useState(() => {
     try {
       const saved = localStorage.getItem('audioverse_catalog');
@@ -18,6 +20,28 @@ export const StoreProvider = ({ children }) => {
       return INITIAL_AUDIOBOOKS;
     }
   });
+
+  // Real-Time Cloud Firestore Sync for Catalog Audiobooks
+  useEffect(() => {
+    try {
+      const unsubscribe = onSnapshot(collection(db, 'audiobooks'), (snapshot) => {
+        if (!snapshot.empty) {
+          const firestoreBooks = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setAudiobooks((prevLocal) => {
+            // Merge Firestore books with local catalog, preferring Firestore data
+            const firestoreIds = new Set(firestoreBooks.map((b) => b.id));
+            const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id));
+            return [...firestoreBooks, ...remainingLocal];
+          });
+        }
+      }, (error) => {
+        console.warn('Firestore snapshot listener notice:', error);
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('Firestore initialization notice:', err);
+    }
+  }, []);
 
   // User Library State
   const [myLibrary, setMyLibrary] = useState(() => {
@@ -380,8 +404,8 @@ export const StoreProvider = ({ children }) => {
     setActiveTab('library');
   };
 
-  // Seller Dashboard Catalog Addition
-  const addAudiobookToCatalog = (newBookData) => {
+  // Seller Dashboard Catalog Addition (Local State + Cloud Firestore Sync)
+  const addAudiobookToCatalog = async (newBookData) => {
     const newBook = {
       ...newBookData,
       id: `ab-custom-${Date.now()}`,
@@ -397,18 +421,37 @@ export const StoreProvider = ({ children }) => {
 
     setAudiobooks((prev) => [newBook, ...prev]);
     showToast(`Published "${newBook.title}" to store catalog!`, 'success');
+
+    try {
+      await setDoc(doc(db, 'audiobooks', newBook.id), newBook);
+      console.log('Synced new audiobook to Firestore:', newBook.id);
+    } catch (err) {
+      console.warn('Firestore write notice:', err);
+    }
   };
 
-  const updateAudiobookInCatalog = (id, updatedFields) => {
+  const updateAudiobookInCatalog = async (id, updatedFields) => {
     setAudiobooks((prev) =>
       prev.map((book) => (book.id === id ? { ...book, ...updatedFields } : book))
     );
     showToast('Audiobook updated successfully!', 'success');
+
+    try {
+      await setDoc(doc(db, 'audiobooks', id), updatedFields, { merge: true });
+    } catch (err) {
+      console.warn('Firestore update notice:', err);
+    }
   };
 
-  const deleteAudiobookFromCatalog = (id) => {
+  const deleteAudiobookFromCatalog = async (id) => {
     setAudiobooks((prev) => prev.filter((book) => book.id !== id));
     showToast('Audiobook removed from catalog.', 'info');
+
+    try {
+      await deleteDoc(doc(db, 'audiobooks', id));
+    } catch (err) {
+      console.warn('Firestore delete notice:', err);
+    }
   };
 
   const updateStripeKeys = (pk, sk) => {

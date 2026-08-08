@@ -16,6 +16,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "firebase": "^12.17.1",
     "jsmediatags": "^3.9.7",
     "lucide-react": "^0.300.0",
     "react": "^18.2.0",

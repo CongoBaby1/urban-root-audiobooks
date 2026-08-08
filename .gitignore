@@ -12,6 +12,8 @@ dist
 dist-isolation
 .DS_Store
 *.local
+.env
+.env.*
 
 # Editor directories and files
 .vscode/*
