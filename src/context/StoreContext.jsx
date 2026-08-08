@@ -445,6 +445,25 @@ export const StoreProvider = ({ children }) => {
     setActiveTab('library');
   };
 
+  /**
+   * Strip large base64 data URLs from fields before writing to Firestore.
+   * Firestore has a 1MB per-document limit — only store https:// URLs, never base64.
+   */
+  const sanitizeForFirestore = (data) => {
+    const safe = { ...data };
+    // Only keep coverUrl if it's a real https URL (not a base64 or blob URL)
+    if (safe.coverUrl && !safe.coverUrl.startsWith('https://')) {
+      delete safe.coverUrl;
+    }
+    // Only keep sampleAudioUrl if it's a real https URL
+    if (safe.sampleAudioUrl && !safe.sampleAudioUrl.startsWith('https://')) {
+      delete safe.sampleAudioUrl;
+    }
+    // Remove blob URLs — they're session-only and useless in Firestore
+    if (safe.audioObjectUrl) delete safe.audioObjectUrl;
+    return safe;
+  };
+
   // Seller Dashboard Catalog Addition (Local State + Cloud Firestore Sync)
   const addAudiobookToCatalog = async (newBookData) => {
     const newBook = {
@@ -464,7 +483,7 @@ export const StoreProvider = ({ children }) => {
     showToast(`Published "${newBook.title}" to store catalog!`, 'success');
 
     try {
-      await setDoc(doc(db, 'audiobooks', newBook.id), newBook);
+      await setDoc(doc(db, 'audiobooks', newBook.id), sanitizeForFirestore(newBook));
       console.log('Synced new audiobook to Firestore:', newBook.id);
     } catch (err) {
       console.warn('Firestore write notice:', err);
@@ -478,7 +497,10 @@ export const StoreProvider = ({ children }) => {
     showToast('Audiobook updated successfully!', 'success');
 
     try {
-      await setDoc(doc(db, 'audiobooks', id), updatedFields, { merge: true });
+      const safeFields = sanitizeForFirestore(updatedFields);
+      if (Object.keys(safeFields).length > 0) {
+        await setDoc(doc(db, 'audiobooks', id), safeFields, { merge: true });
+      }
     } catch (err) {
       console.warn('Firestore update notice:', err);
     }

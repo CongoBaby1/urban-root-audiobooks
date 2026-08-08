@@ -201,21 +201,46 @@ function parseRawImageFromBuffer(frameData) {
 
 export async function extract30SecAudioSampleWav(file) {
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    // Slice up to 20MB from the start of the file to keep decoding fast and avoid OOM
+    const MAX_BYTES = 20 * 1024 * 1024;
+    const slice = file.size > MAX_BYTES ? file.slice(0, MAX_BYTES) : file;
+    const arrayBuffer = await slice.arrayBuffer();
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    let audioBuffer;
+    try {
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    } catch (decodeErr) {
+      // Some browsers can't decode a slice — fall back to full file (smaller files only)
+      console.warn('Slice decode failed, retrying with full file (small files only):', decodeErr.message);
+      if (file.size <= MAX_BYTES) {
+        audioCtx.close();
+        return null; // Already tried full file, give up
+      }
+      const fullBuffer = await file.arrayBuffer();
+      const audioCtx2 = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      try {
+        audioBuffer = await audioCtx2.decodeAudioData(fullBuffer);
+        audioCtx2.close();
+      } catch (e2) {
+        audioCtx2.close();
+        console.warn('Full file decode also failed:', e2.message);
+        return null;
+      }
+    }
+    audioCtx.close();
 
     const totalDuration = audioBuffer.duration || 0;
-    const durationToExtract = Math.min(20, totalDuration || 20);
-    const sampleRate = Math.min(16000, audioBuffer.sampleRate);
+    const durationToExtract = Math.min(20, Math.max(5, totalDuration));
+    const sampleRate = 16000;
     const numChannels = 1; // Mono spoken narration
     const numSamples = Math.floor(durationToExtract * sampleRate);
 
-    // Calculate a random start offset inside the audiobook (skipping opening intro credits/title)
+    // Pick a random start point inside the audiobook body (skip intro/credits)
     let startOffset = 0;
     if (totalDuration > 25) {
       const minOffset = Math.min(20, Math.floor(totalDuration * 0.1));
-      const maxOffset = Math.max(minOffset, Math.floor(totalDuration * 0.85) - 20);
+      const maxOffset = Math.max(minOffset + 5, Math.floor(totalDuration * 0.85) - durationToExtract);
       startOffset = Math.floor(minOffset + Math.random() * (maxOffset - minOffset));
     }
 
@@ -239,6 +264,7 @@ export async function extract30SecAudioSampleWav(file) {
     return null;
   }
 }
+
 
 function audioBufferToWav(buffer) {
   const numChannels = buffer.numberOfChannels;
