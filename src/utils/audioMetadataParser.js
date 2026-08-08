@@ -206,17 +206,16 @@ export async function extract30SecAudioSampleWav(file) {
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
     const totalDuration = audioBuffer.duration || 0;
-    const durationToExtract = Math.min(30, totalDuration || 30);
-    const sampleRate = Math.min(22050, audioBuffer.sampleRate);
-    const numChannels = Math.min(2, audioBuffer.numberOfChannels);
+    const durationToExtract = Math.min(20, totalDuration || 20);
+    const sampleRate = Math.min(16000, audioBuffer.sampleRate);
+    const numChannels = 1; // Mono spoken narration
     const numSamples = Math.floor(durationToExtract * sampleRate);
 
     // Calculate a random start offset inside the audiobook (skipping opening intro credits/title)
     let startOffset = 0;
-    if (totalDuration > 35) {
-      // Pick random window between 10% and 85% mark of the book
-      const minOffset = Math.min(30, Math.floor(totalDuration * 0.1));
-      const maxOffset = Math.max(minOffset, Math.floor(totalDuration * 0.85) - 30);
+    if (totalDuration > 25) {
+      const minOffset = Math.min(20, Math.floor(totalDuration * 0.1));
+      const maxOffset = Math.max(minOffset, Math.floor(totalDuration * 0.85) - 20);
       startOffset = Math.floor(minOffset + Math.random() * (maxOffset - minOffset));
     }
 

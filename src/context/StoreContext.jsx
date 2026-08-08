@@ -105,34 +105,37 @@ export const StoreProvider = ({ children }) => {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Persistent Storage Sync with Quota Safety
+  // Persistent Storage Sync with Quota Safety & Silent Catch
   useEffect(() => {
     try {
-      localStorage.setItem('audioverse_catalog', JSON.stringify(audiobooks));
+      const safeCatalog = audiobooks.map((b) => {
+        if (b.sampleAudioUrl && b.sampleAudioUrl.length > 500000) {
+          return { ...b, sampleAudioUrl: '' };
+        }
+        return b;
+      });
+      localStorage.setItem('audioverse_catalog', JSON.stringify(safeCatalog));
     } catch (err) {
-      console.warn('localStorage quota notice:', err);
-      try {
-        const lightCatalog = audiobooks.map((b) => {
-          if (b.sampleAudioUrl && b.sampleAudioUrl.length > 1000) {
-            return { ...b, sampleAudioUrl: '' };
-          }
-          return b;
-        });
-        localStorage.setItem('audioverse_catalog', JSON.stringify(lightCatalog));
-      } catch (_) {}
+      console.warn('localStorage catalog save notice:', err);
     }
   }, [audiobooks]);
 
   useEffect(() => {
-    localStorage.setItem('audioverse_library', JSON.stringify(myLibrary));
+    try {
+      localStorage.setItem('audioverse_library', JSON.stringify(myLibrary));
+    } catch (_) {}
   }, [myLibrary]);
 
   useEffect(() => {
-    localStorage.setItem('audioverse_cart', JSON.stringify(cart));
+    try {
+      localStorage.setItem('audioverse_cart', JSON.stringify(cart));
+    } catch (_) {}
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('audioverse_seller_stats', JSON.stringify(sellerStats));
+    try {
+      localStorage.setItem('audioverse_seller_stats', JSON.stringify(sellerStats));
+    } catch (_) {}
   }, [sellerStats]);
 
   // Audio Player State
