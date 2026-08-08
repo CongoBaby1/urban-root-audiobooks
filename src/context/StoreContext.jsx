@@ -174,62 +174,8 @@ export const StoreProvider = ({ children }) => {
     };
   }, [audioElement]);
 
-  // AI Speech Narrator Fallback for books without an uploaded MP3 file
-  const speakNarratorSample = (book) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false;
-
-    try {
-      window.speechSynthesis.cancel();
-      audioElement.pause();
-
-      const sampleText = `Sample preview for ${book.title}, written by ${book.author}. ${book.description || 'An extraordinary audiobook experience.'}`;
-      const utterance = new SpeechSynthesisUtterance(sampleText);
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
-
-      const voices = window.speechSynthesis.getVoices();
-      const narratorVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Guy'))) || voices.find(v => v.lang.startsWith('en'));
-      if (narratorVoice) utterance.voice = narratorVoice;
-
-      utterance.onstart = () => {
-        setPlayerState({
-          book,
-          isSample: true,
-          isPlaying: true,
-          currentTime: 0,
-          sampleStartTime: 0,
-          sampleEndTime: 30,
-          duration: 30,
-          playbackSpeed: 1.0,
-          volume: playerState.volume,
-          activeChapterIndex: 0,
-          isSpeechSynthesis: true,
-        });
-        showToast(`🗣️ Narrating AI speech sample preview for "${book.title}"`, 'music');
-      };
-
-      utterance.onend = () => {
-        setPlayerState(prev => ({ ...prev, isPlaying: false, isSpeechSynthesis: false }));
-      };
-
-      utterance.onerror = () => {
-        setPlayerState(prev => ({ ...prev, isPlaying: false, isSpeechSynthesis: false }));
-      };
-
-      window.speechSynthesis.speak(utterance);
-      return true;
-    } catch (e) {
-      console.warn('Speech synthesis notice:', e);
-      return false;
-    }
-  };
-
   // Player Controls
   const playTrack = async (book, isSample = true) => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-
     let audioUrl = isSample ? book.sampleAudioUrl : (book.fullAudioUrl || book.sampleAudioUrl);
     
     // Check if book has a custom audio stored in memory cache or IndexedDB
@@ -250,16 +196,12 @@ export const StoreProvider = ({ children }) => {
       if (audioUrl && audioUrl.startsWith('blob:')) audioUrl = '';
     }
 
-    // If no custom MP3 uploaded yet, use AI Speech Narrator Engine to speak preview
     if (!audioUrl || audioUrl.trim() === '') {
-      const spoke = speakNarratorSample(book);
-      if (spoke) return;
-
       showToast(`ℹ️ No audio file attached for "${book.title}". Please unlock Admin Portal & upload an MP3 file!`, 'info');
       return;
     }
 
-    if (playerState.book?.id === book.id && playerState.isSample === isSample && !playerState.isSpeechSynthesis) {
+    if (playerState.book?.id === book.id && playerState.isSample === isSample) {
       // Toggle play/pause or replay sample if finished
       if (playerState.isPlaying) {
         audioElement.pause();
@@ -325,7 +267,6 @@ export const StoreProvider = ({ children }) => {
           playbackSpeed: playerState.playbackSpeed,
           volume: playerState.volume,
           activeChapterIndex: 0,
-          isSpeechSynthesis: false,
         });
 
         showToast(
@@ -336,11 +277,7 @@ export const StoreProvider = ({ children }) => {
         );
       }).catch((err) => {
         console.warn('Audio playback notice:', err);
-        // Fallback to AI Speech Narrator if audio stream fails
-        const spoke = speakNarratorSample(book);
-        if (!spoke) {
-          showToast(`ℹ️ Unable to play audio for "${book.title}".`, 'info');
-        }
+        showToast(`ℹ️ Unable to play audio for "${book.title}". Please re-upload MP3 file in Admin Portal.`, 'info');
       });
     };
 
@@ -354,17 +291,6 @@ export const StoreProvider = ({ children }) => {
 
   const togglePlayPause = () => {
     if (!playerState.book) return;
-
-    if (playerState.isSpeechSynthesis && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      if (playerState.isPlaying) {
-        window.speechSynthesis.pause();
-        setPlayerState((prev) => ({ ...prev, isPlaying: false }));
-      } else {
-        window.speechSynthesis.resume();
-        setPlayerState((prev) => ({ ...prev, isPlaying: true }));
-      }
-      return;
-    }
 
     if (playerState.isPlaying) {
       audioElement.pause();
