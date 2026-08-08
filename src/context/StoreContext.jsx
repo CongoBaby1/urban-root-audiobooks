@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { INITIAL_AUDIOBOOKS } from '../data/initialAudiobooks';
 import { getAudioFile } from '../utils/audioStorage';
 
