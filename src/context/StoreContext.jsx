@@ -187,13 +187,17 @@ export const StoreProvider = ({ children }) => {
         } else if (stored instanceof Blob || stored instanceof File) {
           audioUrl = URL.createObjectURL(stored);
         }
+      } else if (audioUrl && audioUrl.startsWith('blob:')) {
+        // Stale or cross-domain blob URL from another session - reset
+        audioUrl = '';
       }
     } catch (e) {
       console.warn('Audio retrieve notice:', e);
+      if (audioUrl && audioUrl.startsWith('blob:')) audioUrl = '';
     }
 
-    if (!audioUrl) {
-      showToast(`ℹ️ No audio file uploaded for "${book.title}" yet. Please upload an MP3 file in Admin Portal.`, 'info');
+    if (!audioUrl || audioUrl.trim() === '') {
+      showToast(`ℹ️ No audio file attached for "${book.title}". Please unlock Admin Portal & upload an MP3 file!`, 'info');
       return;
     }
 
