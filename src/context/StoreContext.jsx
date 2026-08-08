@@ -53,9 +53,26 @@ export const StoreProvider = ({ children }) => {
 
           if (firestoreBooks.length > 0) {
             setAudiobooks((prevLocal) => {
+              // Build a map of local books so we can fill in fields Firestore doesn't have
+              const localMap = new Map(prevLocal.map((b) => [b.id, b]));
               const firestoreIds = new Set(firestoreBooks.map((b) => b.id));
+
+              // Merge: Firestore is source of truth for text fields, but local fills in
+              // large binary fields (coverUrl base64, sampleAudioUrl) that weren't written to Firestore
+              const mergedFirestore = firestoreBooks.map((fb) => {
+                const local = localMap.get(fb.id);
+                if (!local) return fb;
+                return {
+                  ...fb,
+                  // Restore cover from local cache if Firestore doesn't have one
+                  coverUrl: fb.coverUrl || local.coverUrl || '',
+                  // Restore sample URL from local cache if Firestore doesn't have one
+                  sampleAudioUrl: fb.sampleAudioUrl || local.sampleAudioUrl || '',
+                };
+              });
+
               const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id)).map(sanitizeBook);
-              return [...firestoreBooks, ...remainingLocal];
+              return [...mergedFirestore, ...remainingLocal];
             });
           }
         }
@@ -446,21 +463,19 @@ export const StoreProvider = ({ children }) => {
   };
 
   /**
-   * Strip large base64 data URLs from fields before writing to Firestore.
-   * Firestore has a 1MB per-document limit — only store https:// URLs, never base64.
+   * Strip large data that would exceed Firestore's 1MB document limit.
+   * Cover images (ID3 JPEG base64 ~50-200KB) are fine.
+   * Only strip: large audio base64 (WAV previews) and session-only blob URLs.
    */
   const sanitizeForFirestore = (data) => {
     const safe = { ...data };
-    // Only keep coverUrl if it's a real https URL (not a base64 or blob URL)
-    if (safe.coverUrl && !safe.coverUrl.startsWith('https://')) {
-      delete safe.coverUrl;
-    }
-    // Only keep sampleAudioUrl if it's a real https URL
-    if (safe.sampleAudioUrl && !safe.sampleAudioUrl.startsWith('https://')) {
+    // Strip sampleAudioUrl ONLY if it's a large base64 audio blob (not a cloud https:// URL)
+    if (safe.sampleAudioUrl && safe.sampleAudioUrl.startsWith('data:') && safe.sampleAudioUrl.length > 100000) {
       delete safe.sampleAudioUrl;
     }
-    // Remove blob URLs — they're session-only and useless in Firestore
+    // Remove blob:// URLs — they're session-only object URLs, useless in Firestore
     if (safe.audioObjectUrl) delete safe.audioObjectUrl;
+    if (safe.coverUrl && safe.coverUrl.startsWith('blob:')) delete safe.coverUrl;
     return safe;
   };
 
