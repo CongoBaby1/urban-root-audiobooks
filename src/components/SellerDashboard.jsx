@@ -550,7 +550,10 @@ export const SellerDashboard = () => {
                           const meta = await parseAudioFileMetadata(file);
                           const persistentWavDataUrl = await extract30SecAudioSampleWav(file);
                           if (persistentWavDataUrl) {
+                            // Save the full MP3 for library playback
                             await saveAudioFile(book.id, file);
+                            // Save the 30-sec WAV preview separately so it survives page reloads
+                            await saveAudioFile(book.id + '_sample', persistentWavDataUrl);
                             updateAudiobookInCatalog(book.id, {
                               sampleAudioUrl: persistentWavDataUrl,
                               duration: meta.durationFormatted || book.duration,

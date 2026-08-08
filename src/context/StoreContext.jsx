@@ -230,17 +230,30 @@ export const StoreProvider = ({ children }) => {
   const playTrack = async (book, isSample = true) => {
     let audioUrl = isSample ? book.sampleAudioUrl : (book.fullAudioUrl || book.sampleAudioUrl);
     
-    // Check if book has a custom audio stored in memory cache or IndexedDB
+    // Check IndexedDB for stored audio — use '_sample' key for previews, 'bookId' for full library playback
     try {
-      const stored = await getAudioFile(book.id);
-      if (stored) {
-        if (typeof stored === 'string' && stored.length > 0) {
-          audioUrl = stored;
-        } else if (stored instanceof Blob || stored instanceof File) {
-          audioUrl = URL.createObjectURL(stored);
+      if (isSample) {
+        // Try the dedicated 30-sec WAV preview first
+        const storedSample = await getAudioFile(book.id + '_sample');
+        if (storedSample && typeof storedSample === 'string' && storedSample.length > 0) {
+          audioUrl = storedSample;
+        } else if (storedSample instanceof Blob || storedSample instanceof File) {
+          audioUrl = URL.createObjectURL(storedSample);
+        }
+      }
+
+      // If still no sample URL, try the full file as fallback
+      if (!audioUrl || audioUrl.trim() === '') {
+        const stored = await getAudioFile(book.id);
+        if (stored) {
+          if (typeof stored === 'string' && stored.length > 0) {
+            audioUrl = stored;
+          } else if (stored instanceof Blob || stored instanceof File) {
+            audioUrl = URL.createObjectURL(stored);
+          }
         }
       } else if (audioUrl && audioUrl.startsWith('blob:')) {
-        // Stale or cross-domain blob URL from another session - reset
+        // Stale blob URL from another session - reset
         audioUrl = '';
       }
     } catch (e) {
