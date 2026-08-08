@@ -5,9 +5,21 @@ import { Play, Pause, Star, Clock, ShoppingCart, ShieldCheck, Sparkles, Radio } 
 export const HeroSection = () => {
   const { audiobooks, playerState, playTrack, addToCart } = useStore();
 
-  const featuredBook = audiobooks.find((b) => b.featured) || audiobooks[0];
+  const featuredBook =
+    audiobooks.find((b) => b && b.featured && b.title && b.title.trim() !== '') ||
+    audiobooks.find((b) => b && b.title && b.title.trim() !== '') ||
+    audiobooks[0];
 
-  if (!featuredBook) return null;
+  if (!featuredBook || !featuredBook.title) return null;
+
+  const title = featuredBook.title || 'The Cybernetic Frontier';
+  const author = featuredBook.author || 'Elena Vance';
+  const narrator = featuredBook.narrator || author;
+  const description = featuredBook.description || 'An immersive journey through artificial intelligence, orbital megastructures, and human consciousness on the edge of tomorrow.';
+  const rating = featuredBook.rating || 4.9;
+  const ratingCount = featuredBook.ratingCount || 328;
+  const duration = featuredBook.duration || '11 hrs 42 mins';
+  const coverUrl = featuredBook.coverUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
 
   const isCurrentlyPlaying =
     playerState.book?.id === featuredBook.id && playerState.isPlaying;
@@ -28,31 +40,31 @@ export const HeroSection = () => {
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
-            {featuredBook.title}
+            {title}
           </h1>
 
           <p className="text-sm sm:text-base text-slate-300 font-medium line-clamp-3 leading-relaxed">
-            {featuredBook.description}
+            {description}
           </p>
 
           <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-slate-300">
             <div className="flex items-center gap-1 text-amber-400 font-bold">
               <Star className="w-4 h-4 fill-amber-400" />
-              <span>{featuredBook.rating}</span>
-              <span className="text-slate-400 font-normal">({featuredBook.ratingCount} reviews)</span>
+              <span>{rating}</span>
+              <span className="text-slate-400 font-normal">({ratingCount} reviews)</span>
             </div>
 
             <span className="text-slate-600">•</span>
 
             <div className="flex items-center gap-1.5 font-medium text-slate-300">
               <Clock className="w-4 h-4 text-amber-400" />
-              <span>{featuredBook.duration}</span>
+              <span>{duration}</span>
             </div>
 
             <span className="text-slate-600">•</span>
 
             <div className="badge-emerald px-2.5 py-0.5 rounded-full text-xs font-semibold">
-              Narrated by {featuredBook.narrator}
+              Narrated by {narrator}
             </div>
           </div>
 
@@ -119,15 +131,15 @@ export const HeroSection = () => {
 
             <div className="relative w-64 sm:w-72 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border border-slate-700/80 bg-slate-950 flex items-center justify-center p-1">
               <img
-                src={featuredBook.coverUrl}
-                alt={featuredBook.title}
+                src={coverUrl}
+                alt={title}
                 className="w-full h-full object-contain transform group-hover:scale-105 transition duration-500 rounded-xl"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-80" />
               
               <div className="absolute bottom-4 left-4 right-4 text-center">
                 <span className="text-xs font-semibold text-amber-300 uppercase tracking-widest bg-slate-950/80 px-3 py-1 rounded-full backdrop-blur">
-                  Author: {featuredBook.author}
+                  Author: {author}
                 </span>
               </div>
             </div>

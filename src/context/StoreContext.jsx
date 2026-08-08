@@ -26,13 +26,17 @@ export const StoreProvider = ({ children }) => {
     try {
       const unsubscribe = onSnapshot(collection(db, 'audiobooks'), (snapshot) => {
         if (!snapshot.empty) {
-          const firestoreBooks = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-          setAudiobooks((prevLocal) => {
-            // Merge Firestore books with local catalog, preferring Firestore data
-            const firestoreIds = new Set(firestoreBooks.map((b) => b.id));
-            const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id));
-            return [...firestoreBooks, ...remainingLocal];
-          });
+          const firestoreBooks = snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((b) => b && b.title && b.title.trim() !== '');
+
+          if (firestoreBooks.length > 0) {
+            setAudiobooks((prevLocal) => {
+              const firestoreIds = new Set(firestoreBooks.map((b) => b.id));
+              const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id));
+              return [...firestoreBooks, ...remainingLocal];
+            });
+          }
         }
       }, (error) => {
         console.warn('Firestore snapshot listener notice:', error);
