@@ -205,16 +205,26 @@ export async function extract30SecAudioSampleWav(file) {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-    const durationToExtract = Math.min(30, audioBuffer.duration || 30);
+    const totalDuration = audioBuffer.duration || 0;
+    const durationToExtract = Math.min(30, totalDuration || 30);
     const sampleRate = Math.min(22050, audioBuffer.sampleRate);
     const numChannels = Math.min(2, audioBuffer.numberOfChannels);
     const numSamples = Math.floor(durationToExtract * sampleRate);
+
+    // Calculate a random start offset inside the audiobook (skipping opening intro credits/title)
+    let startOffset = 0;
+    if (totalDuration > 35) {
+      // Pick random window between 10% and 85% mark of the book
+      const minOffset = Math.min(30, Math.floor(totalDuration * 0.1));
+      const maxOffset = Math.max(minOffset, Math.floor(totalDuration * 0.85) - 30);
+      startOffset = Math.floor(minOffset + Math.random() * (maxOffset - minOffset));
+    }
 
     const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(numChannels, numSamples, sampleRate);
     const source = offlineCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(offlineCtx.destination);
-    source.start(0, 0, durationToExtract);
+    source.start(0, startOffset, durationToExtract);
 
     const renderedBuffer = await offlineCtx.startRendering();
     const wavBlob = audioBufferToWav(renderedBuffer);
