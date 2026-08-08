@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useStore } from '../context/StoreContext';
 import { parseAudioFileMetadata, extract30SecAudioSampleWav } from '../utils/audioMetadataParser';
 import { saveAudioFile } from '../utils/audioStorage';
+import { uploadSampleToStorage } from '../utils/firebaseStorage';
 import { CATEGORIES } from '../data/initialAudiobooks';
 import {
   DollarSign,
@@ -546,21 +547,33 @@ export const SellerDashboard = () => {
                       onChange={async (e) => {
                         if (e.target.files && e.target.files[0]) {
                           const file = e.target.files[0];
-                          showToast(`⏳ Extracting 30-sec audio sample from "${file.name}"...`, 'info');
+                          showToast(`⏳ Extracting 30-sec preview from "${file.name}"...`, 'info');
                           const meta = await parseAudioFileMetadata(file);
-                          const persistentWavDataUrl = await extract30SecAudioSampleWav(file);
-                          if (persistentWavDataUrl) {
-                            // Save the full MP3 for library playback
+                          const wavDataUrl = await extract30SecAudioSampleWav(file);
+                          if (wavDataUrl) {
+                            // Save full MP3 to browser IndexedDB for library playback
                             await saveAudioFile(book.id, file);
-                            // Save the 30-sec WAV preview separately so it survives page reloads
-                            await saveAudioFile(book.id + '_sample', persistentWavDataUrl);
-                            updateAudiobookInCatalog(book.id, {
-                              sampleAudioUrl: persistentWavDataUrl,
+                            // Also cache sample locally as fallback
+                            await saveAudioFile(book.id + '_sample', wavDataUrl);
+
+                            // Upload 30-sec WAV preview to Firebase Storage (permanent cloud URL)
+                            showToast(`☁️ Uploading preview to cloud storage...`, 'info');
+                            const cloudUrl = await uploadSampleToStorage(book.id, wavDataUrl);
+                            const finalSampleUrl = cloudUrl || wavDataUrl;
+
+                            // Save the cloud URL (or local fallback) to Firestore catalog
+                            await updateAudiobookInCatalog(book.id, {
+                              sampleAudioUrl: finalSampleUrl,
                               duration: meta.durationFormatted || book.duration,
                             });
-                            showToast(`✨ Attached 30-sec preview sample to "${book.title}"!`, 'success');
+
+                            if (cloudUrl) {
+                              showToast(`✅ Preview uploaded to cloud! "${book.title}" is ready for all buyers.`, 'success');
+                            } else {
+                              showToast(`✨ Preview saved locally for "${book.title}".`, 'success');
+                            }
                           } else {
-                            showToast(`Unable to parse 30-sec sample from "${file.name}"`, 'error');
+                            showToast(`⚠️ Could not extract preview from "${file.name}". Try an MP3 file.`, 'error');
                           }
                         }
                       }}
