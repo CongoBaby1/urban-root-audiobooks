@@ -5,9 +5,18 @@ import { Play, Pause, Star, Clock, ShoppingCart, Check, Headphones } from 'lucid
 export const AudiobookCard = ({ book }) => {
   const { playerState, playTrack, addToCart, myLibrary } = useStore();
 
-  const isOwned = myLibrary.some((item) => item.id === book.id);
+  const title = (book?.title && String(book.title).trim()) || 'Untitled Audiobook';
+  const author = (book?.author && String(book.author).trim()) || 'Featured Author';
+  const description = (book?.description && String(book.description).trim()) || 'An incredible digital audiobook experience.';
+  const coverUrl = (book?.coverUrl && String(book.coverUrl).trim()) || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80';
+  const category = (book?.category && String(book.category).trim()) || 'General';
+  const duration = (book?.duration && String(book.duration).trim()) || '8 hrs 15 mins';
+  const price = Number(book?.price) || 19.99;
+  const rating = Number(book?.rating) || 4.8;
+
+  const isOwned = myLibrary.some((item) => item.id === book?.id);
   const isPlayingThisSample =
-    playerState.book?.id === book.id && playerState.isPlaying;
+    playerState.book?.id === book?.id && playerState.isPlaying;
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden flex flex-col justify-between group relative">
@@ -15,8 +24,8 @@ export const AudiobookCard = ({ book }) => {
       {/* Cover Image Container */}
       <div className="relative aspect-[3/4] overflow-hidden bg-slate-950 flex items-center justify-center p-1">
         <img
-          src={book.coverUrl}
-          alt={book.title}
+          src={coverUrl}
+          alt={title}
           className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
         />
@@ -27,7 +36,7 @@ export const AudiobookCard = ({ book }) => {
         {/* Category Badge & Bestseller Ribbon */}
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
           <span className="px-2.5 py-1 text-[11px] font-bold text-slate-200 bg-slate-950/80 backdrop-blur rounded-lg border border-slate-700">
-            {book.category}
+            {category}
           </span>
           {book.bestseller && (
             <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider badge-amber rounded-md">
@@ -62,14 +71,14 @@ export const AudiobookCard = ({ book }) => {
       <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
         <div>
           <h3 className="font-bold text-base text-white group-hover:text-amber-400 transition-colors line-clamp-1">
-            {book.title}
+            {title}
           </h3>
           <p className="text-xs text-slate-400 font-medium mt-0.5">
-            By <span className="text-slate-300">{book.author}</span>
+            By <span className="text-slate-300">{author}</span>
           </p>
 
           <p className="text-xs text-slate-400 line-clamp-2 mt-2 leading-relaxed">
-            {book.description}
+            {description}
           </p>
         </div>
 
@@ -77,12 +86,12 @@ export const AudiobookCard = ({ book }) => {
         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>{book.duration}</span>
+            <span>{duration}</span>
           </div>
 
           <div className="flex items-center gap-1 text-amber-400 font-bold">
             <Star className="w-3.5 h-3.5 fill-amber-400" />
-            <span>{book.rating}</span>
+            <span>{rating}</span>
           </div>
         </div>
 
@@ -90,9 +99,9 @@ export const AudiobookCard = ({ book }) => {
         <div className="flex items-center justify-between pt-1">
           <div>
             <div className="text-lg font-extrabold text-white">
-              ${(Number(book.price) || 0).toFixed(2)}
+              ${price.toFixed(2)}
             </div>
-            {book.originalPrice && (
+            {book?.originalPrice && (
               <div className="text-[11px] text-slate-500 line-through">
                 ${(Number(book.originalPrice) || 0).toFixed(2)}
               </div>

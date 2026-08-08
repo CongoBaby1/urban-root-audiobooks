@@ -6,18 +6,39 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firesto
 
 const StoreContext = createContext();
 
+const sanitizeBook = (book) => {
+  if (!book || typeof book !== 'object') return INITIAL_AUDIOBOOKS[0];
+  const defaultBook = INITIAL_AUDIOBOOKS.find((b) => b.id === book.id) || INITIAL_AUDIOBOOKS[0];
+  return {
+    ...defaultBook,
+    ...book,
+    title: (book.title && String(book.title).trim()) || defaultBook.title,
+    author: (book.author && String(book.author).trim()) || defaultBook.author,
+    narrator: (book.narrator && String(book.narrator).trim()) || defaultBook.narrator || defaultBook.author,
+    coverUrl: (book.coverUrl && String(book.coverUrl).trim()) || defaultBook.coverUrl,
+    description: (book.description && String(book.description).trim()) || defaultBook.description,
+    price: Number(book.price) || defaultBook.price || 19.99,
+    category: (book.category && String(book.category).trim()) || defaultBook.category || 'General',
+    rating: Number(book.rating) || defaultBook.rating || 4.8,
+    duration: (book.duration && String(book.duration).trim()) || defaultBook.duration || '8 hrs 30 mins',
+  };
+};
+
 export const StoreProvider = ({ children }) => {
   // Catalog State (Firestore Sync + LocalStorage Fallback)
   const [audiobooks, setAudiobooks] = useState(() => {
     try {
       const saved = localStorage.getItem('audioverse_catalog');
-      if (!saved) return INITIAL_AUDIOBOOKS;
+      if (!saved) return INITIAL_AUDIOBOOKS.map(sanitizeBook);
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_AUDIOBOOKS;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(sanitizeBook);
+      }
+      return INITIAL_AUDIOBOOKS.map(sanitizeBook);
     } catch (e) {
       console.warn('LocalStorage parse error - safely restoring catalog:', e);
       try { localStorage.removeItem('audioverse_catalog'); } catch (_) {}
-      return INITIAL_AUDIOBOOKS;
+      return INITIAL_AUDIOBOOKS.map(sanitizeBook);
     }
   });
 
@@ -27,13 +48,13 @@ export const StoreProvider = ({ children }) => {
       const unsubscribe = onSnapshot(collection(db, 'audiobooks'), (snapshot) => {
         if (!snapshot.empty) {
           const firestoreBooks = snapshot.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
+            .map((d) => sanitizeBook({ id: d.id, ...d.data() }))
             .filter((b) => b && b.title && b.title.trim() !== '');
 
           if (firestoreBooks.length > 0) {
             setAudiobooks((prevLocal) => {
               const firestoreIds = new Set(firestoreBooks.map((b) => b.id));
-              const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id));
+              const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id)).map(sanitizeBook);
               return [...firestoreBooks, ...remainingLocal];
             });
           }
