@@ -54,7 +54,14 @@ export const AudioPlayer = () => {
   const progressPercent = duration ? (currentTime / duration) * 100 : 0;
 
   return (
-    <aside className="fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-slate-800 shadow-2xl p-3 sm:p-4">
+    <aside
+      className="fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-slate-800 shadow-2xl p-3 sm:p-4"
+      style={{
+        transform: isPlaying ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+        pointerEvents: isPlaying ? 'all' : 'none',
+      }}
+    >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         
         {/* Left Section: Book Details & Thumbnail */}
