@@ -53,3 +53,33 @@ export async function getSampleDownloadUrl(bookId) {
     return null;
   }
 }
+
+/**
+ * Uploads a base64 cover image (data:image/...) to Firebase Storage.
+ * Returns a permanent public https:// URL, or null on failure.
+ * Storing the cloud URL in Firestore keeps document size tiny and enables
+ * cross-device cover persistence.
+ *
+ * @param {string} bookId
+ * @param {string} dataUrl - base64 data URL of the cover image
+ * @returns {Promise<string|null>}
+ */
+export async function uploadCoverToStorage(bookId, dataUrl) {
+  try {
+    if (!bookId || !dataUrl || !dataUrl.startsWith('data:image')) return null;
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const ext = blob.type.includes('png') ? 'png' : 'jpg';
+    const storageRef = ref(storage, `covers/${bookId}_cover.${ext}`);
+    const snapshot = await uploadBytes(storageRef, blob, {
+      contentType: blob.type || 'image/jpeg',
+      cacheControl: 'public, max-age=31536000',
+    });
+    const downloadUrl = await getDownloadURL(snapshot.ref);
+    console.log(`✅ Firebase Storage: Uploaded cover for "${bookId}" → ${downloadUrl}`);
+    return downloadUrl;
+  } catch (err) {
+    console.warn('Firebase Storage cover upload notice:', err);
+    return null;
+  }
+}

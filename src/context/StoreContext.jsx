@@ -488,16 +488,18 @@ export const StoreProvider = ({ children }) => {
 
   /**
    * Strip large data that would exceed Firestore's 1MB document limit.
-   * Cover images (ID3 JPEG base64 ~50-200KB) are fine.
-   * Only strip: large audio base64 (WAV previews) and session-only blob URLs.
+   * MP3 cover art (ID3 embedded JPEG) can be 500KB–1.5MB as base64 —
+   * if included it silently kills the ENTIRE Firestore write, including sampleAudioUrl.
+   * Covers are stored in localStorage for the current session and uploaded to
+   * Firebase Storage separately to get a permanent https:// URL.
    */
   const sanitizeForFirestore = (data) => {
     const safe = { ...data };
-    // Strip sampleAudioUrl ONLY if it's a large base64 audio blob (not a cloud https:// URL)
-    if (safe.sampleAudioUrl && safe.sampleAudioUrl.startsWith('data:') && safe.sampleAudioUrl.length > 100000) {
-      delete safe.sampleAudioUrl;
-    }
-    // Remove blob:// URLs — they're session-only object URLs, useless in Firestore
+    // Strip ALL base64 data: URLs — they are too large for Firestore
+    // Only allow https:// cloud URLs (tiny, safe)
+    if (safe.coverUrl && safe.coverUrl.startsWith('data:')) delete safe.coverUrl;
+    if (safe.sampleAudioUrl && safe.sampleAudioUrl.startsWith('data:')) delete safe.sampleAudioUrl;
+    // Remove blob:// and audioObjectUrl — session-only, useless in Firestore
     if (safe.audioObjectUrl) delete safe.audioObjectUrl;
     if (safe.coverUrl && safe.coverUrl.startsWith('blob:')) delete safe.coverUrl;
     return safe;

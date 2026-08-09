@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useStore } from '../context/StoreContext';
 import { parseAudioFileMetadata, extract30SecAudioSampleWav } from '../utils/audioMetadataParser';
 import { saveAudioFile } from '../utils/audioStorage';
-import { uploadSampleToStorage } from '../utils/firebaseStorage';
+import { uploadSampleToStorage, uploadCoverToStorage } from '../utils/firebaseStorage';
 import { CATEGORIES } from '../data/initialAudiobooks';
 import {
   DollarSign,
@@ -556,16 +556,26 @@ export const SellerDashboard = () => {
                             // Also cache sample locally as fallback
                             await saveAudioFile(book.id + '_sample', wavDataUrl);
 
-                            // Upload 30-sec WAV preview to Firebase Storage (permanent cloud URL)
-                            showToast(`☁️ Uploading preview to cloud storage...`, 'info');
-                            const cloudUrl = await uploadSampleToStorage(book.id, wavDataUrl);
-                            const finalSampleUrl = cloudUrl || wavDataUrl;
+                            // Upload 30-sec WAV preview AND cover to Firebase Storage in parallel
+                            showToast(`☁️ Uploading preview & cover to cloud...`, 'info');
+                            const [cloudUrl, cloudCoverUrl] = await Promise.all([
+                              uploadSampleToStorage(book.id, wavDataUrl),
+                              // Upload cover if it's a local base64 — gives permanent cloud URL
+                              (book.coverUrl && book.coverUrl.startsWith('data:image'))
+                                ? uploadCoverToStorage(book.id, book.coverUrl)
+                                : Promise.resolve(null),
+                            ]);
 
-                            // Save the cloud URL (or local fallback) to Firestore catalog
-                            await updateAudiobookInCatalog(book.id, {
+                            const finalSampleUrl = cloudUrl || wavDataUrl;
+                            const updatePayload = {
                               sampleAudioUrl: finalSampleUrl,
                               duration: meta.durationFormatted || book.duration,
-                            });
+                            };
+                            // If we got a cloud cover URL, update it too (removes base64 from Firestore)
+                            if (cloudCoverUrl) updatePayload.coverUrl = cloudCoverUrl;
+
+                            // Save the complete updated book to Firestore
+                            await updateAudiobookInCatalog(book.id, updatePayload);
 
                             if (cloudUrl) {
                               showToast(`✅ Preview uploaded to cloud! "${book.title}" is ready for all buyers.`, 'success');
