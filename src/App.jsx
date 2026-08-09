@@ -3,7 +3,6 @@ import { useStore } from './context/StoreContext';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { AudiobookCard } from './components/AudiobookCard';
-import { AudioPlayer } from './components/AudioPlayer';
 import { CartDrawer } from './components/CartDrawer';
 import { StripeCheckoutModal } from './components/StripeCheckoutModal';
 import { LibraryView } from './components/LibraryView';
@@ -120,9 +119,6 @@ export const AppContent = () => {
       {/* Slide-out Cart & Checkout Modals */}
       <CartDrawer />
       <StripeCheckoutModal />
-
-      {/* Sticky Bottom Audio Stream Player */}
-      <AudioPlayer />
     </div>
   );
 };
