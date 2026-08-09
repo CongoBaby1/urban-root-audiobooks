@@ -6,21 +6,23 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firesto
 
 const StoreContext = createContext();
 
+// IDs of the old placeholder demo books — purge them everywhere on load
+const PLACEHOLDER_IDS = new Set(['ab-1', 'ab-2', 'ab-3', 'ab-4', 'ab-5', 'ab-6']);
+
 const sanitizeBook = (book) => {
-  if (!book || typeof book !== 'object') return INITIAL_AUDIOBOOKS[0];
-  const defaultBook = INITIAL_AUDIOBOOKS.find((b) => b.id === book.id) || INITIAL_AUDIOBOOKS[0];
+  if (!book || typeof book !== 'object') return null;
+  if (!book.title || String(book.title).trim() === '') return null;
   return {
-    ...defaultBook,
     ...book,
-    title: (book.title && String(book.title).trim()) || defaultBook.title,
-    author: (book.author && String(book.author).trim()) || defaultBook.author,
-    narrator: (book.narrator && String(book.narrator).trim()) || defaultBook.narrator || defaultBook.author,
-    coverUrl: (book.coverUrl && String(book.coverUrl).trim()) || defaultBook.coverUrl,
-    description: (book.description && String(book.description).trim()) || defaultBook.description,
-    price: Number(book.price) || defaultBook.price || 19.99,
-    category: (book.category && String(book.category).trim()) || defaultBook.category || 'General',
-    rating: Number(book.rating) || defaultBook.rating || 4.8,
-    duration: (book.duration && String(book.duration).trim()) || defaultBook.duration || '8 hrs 30 mins',
+    title: String(book.title).trim(),
+    author: (book.author && String(book.author).trim()) || 'Unknown Author',
+    narrator: (book.narrator && String(book.narrator).trim()) || (book.author && String(book.author).trim()) || 'Unknown Narrator',
+    coverUrl: (book.coverUrl && String(book.coverUrl).trim()) || '',
+    description: (book.description && String(book.description).trim()) || '',
+    price: Number(book.price) || 19.99,
+    category: (book.category && String(book.category).trim()) || 'General',
+    rating: Number(book.rating) || 4.8,
+    duration: (book.duration && String(book.duration).trim()) || '8 hrs 30 mins',
   };
 };
 
@@ -29,18 +31,32 @@ export const StoreProvider = ({ children }) => {
   const [audiobooks, setAudiobooks] = useState(() => {
     try {
       const saved = localStorage.getItem('audioverse_catalog');
-      if (!saved) return INITIAL_AUDIOBOOKS.map(sanitizeBook);
+      if (!saved) return [];
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(sanitizeBook);
+        // Filter out old placeholder demo books and sanitize
+        return parsed
+          .filter((b) => b && b.id && !PLACEHOLDER_IDS.has(b.id))
+          .map(sanitizeBook)
+          .filter(Boolean);
       }
-      return INITIAL_AUDIOBOOKS.map(sanitizeBook);
+      return [];
     } catch (e) {
-      console.warn('LocalStorage parse error - safely restoring catalog:', e);
+      console.warn('LocalStorage parse error - resetting catalog:', e);
       try { localStorage.removeItem('audioverse_catalog'); } catch (_) {}
-      return INITIAL_AUDIOBOOKS.map(sanitizeBook);
+      return [];
     }
   });
+
+  // One-time migration: delete old placeholder demo books from Firestore
+  useEffect(() => {
+    const migrationKey = 'audioverse_placeholder_purge_v1';
+    if (localStorage.getItem(migrationKey)) return; // Already done
+    PLACEHOLDER_IDS.forEach(async (pid) => {
+      try { await deleteDoc(doc(db, 'audiobooks', pid)); } catch (_) {}
+    });
+    localStorage.setItem(migrationKey, '1');
+  }, []);
 
   // Real-Time Cloud Firestore Sync for Catalog Audiobooks
   useEffect(() => {
@@ -49,7 +65,7 @@ export const StoreProvider = ({ children }) => {
         if (!snapshot.empty) {
           const firestoreBooks = snapshot.docs
             .map((d) => sanitizeBook({ id: d.id, ...d.data() }))
-            .filter((b) => b && b.title && b.title.trim() !== '');
+            .filter((b) => b && b.title && b.title.trim() !== '' && !PLACEHOLDER_IDS.has(b.id));
 
           if (firestoreBooks.length > 0) {
             setAudiobooks((prevLocal) => {
@@ -71,7 +87,10 @@ export const StoreProvider = ({ children }) => {
                 };
               });
 
-              const remainingLocal = prevLocal.filter((b) => !firestoreIds.has(b.id)).map(sanitizeBook);
+              const remainingLocal = prevLocal
+                .filter((b) => !firestoreIds.has(b.id) && !PLACEHOLDER_IDS.has(b.id))
+                .map(sanitizeBook)
+                .filter(Boolean);
               return [...mergedFirestore, ...remainingLocal];
             });
           }
@@ -88,7 +107,12 @@ export const StoreProvider = ({ children }) => {
   // User Library State
   const [myLibrary, setMyLibrary] = useState(() => {
     const saved = localStorage.getItem('audioverse_library');
-    return saved ? JSON.parse(saved) : [INITIAL_AUDIOBOOKS[0]]; // Pre-owned starter book
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      // Filter out old placeholder books from library too
+      return Array.isArray(parsed) ? parsed.filter((b) => b && !PLACEHOLDER_IDS.has(b.id)) : [];
+    } catch { return []; }
   });
 
   // Shopping Cart State
@@ -506,15 +530,28 @@ export const StoreProvider = ({ children }) => {
   };
 
   const updateAudiobookInCatalog = async (id, updatedFields) => {
-    setAudiobooks((prev) =>
-      prev.map((book) => (book.id === id ? { ...book, ...updatedFields } : book))
-    );
+    // Capture the full merged book synchronously inside the state updater
+    // so we can write a complete document to Firestore (not just partial fields)
+    let fullMergedBook = null;
+    setAudiobooks((prev) => {
+      const next = prev.map((book) => {
+        if (book.id === id) {
+          fullMergedBook = { ...book, ...updatedFields };
+          return fullMergedBook;
+        }
+        return book;
+      });
+      return next;
+    });
     showToast('Audiobook updated successfully!', 'success');
 
     try {
-      const safeFields = sanitizeForFirestore(updatedFields);
-      if (Object.keys(safeFields).length > 0) {
-        await setDoc(doc(db, 'audiobooks', id), safeFields, { merge: true });
+      // Write the full book so Firestore always has a complete document
+      const docData = fullMergedBook
+        ? sanitizeForFirestore(fullMergedBook)
+        : sanitizeForFirestore(updatedFields);
+      if (Object.keys(docData).length > 0) {
+        await setDoc(doc(db, 'audiobooks', id), docData, { merge: true });
       }
     } catch (err) {
       console.warn('Firestore update notice:', err);
