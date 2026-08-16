@@ -76,6 +76,7 @@ export const SellerDashboard = () => {
   const [secretKeyInput, setSecretKeyInput] = useState(stripeConfig.secretKey);
 
   const [uploadedAudioFile, setUploadedAudioFile] = useState(null);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Handle Audio File Extraction (MP3/M4B)
   const processAudioFile = async (file) => {
@@ -215,6 +216,8 @@ export const SellerDashboard = () => {
       return;
     }
 
+    setIsPublishing(true);
+
     // If set as featured, clear existing featured flags
     if (isFeatured) {
       audiobooks.forEach((b) => updateAudiobookInCatalog(b.id, { featured: false }));
@@ -258,6 +261,7 @@ export const SellerDashboard = () => {
     showToast(`🎉 "${title}" published to marketplace!`, 'success');
 
     // Reset Form
+    setIsPublishing(false);
     setTitle('');
     setAuthor('');
     setNarrator('');
@@ -1125,9 +1129,17 @@ export const SellerDashboard = () => {
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-xl btn-amber font-extrabold text-sm shadow-lg"
+              disabled={isPublishing}
+              className="w-full py-3.5 rounded-xl btn-amber font-extrabold text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              🚀 Publish Audiobook to Marketplace Catalog
+              {isPublishing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                '🚀 Publish Audiobook to Marketplace Catalog'
+              )}
             </button>
           </form>
         </div>
