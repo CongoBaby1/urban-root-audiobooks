@@ -233,6 +233,11 @@ export const SellerDashboard = () => {
       await saveAudioFile(newBookId + '_sample', sampleAudioUrl);
     }
 
+    // Save the cover image under _cover key so it persists across refreshes
+    if (coverUrl && coverUrl.startsWith('data:')) {
+      await saveAudioFile(newBookId + '_cover', coverUrl);
+    }
+
     const liveAudioLink = sampleAudioUrl || (uploadedAudioFile ? URL.createObjectURL(uploadedAudioFile) : '');
 
     addAudiobookToCatalog({

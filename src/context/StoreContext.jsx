@@ -204,6 +204,45 @@ export const StoreProvider = ({ children }) => {
     } catch (_) {}
   }, [sellerStats]);
 
+  // Cover Image Restoration from IndexedDB after refresh
+  // Firestore and localStorage both strip base64 cover data — IndexedDB is the only
+  // persistent store for locally-extracted covers. Run once per book ID.
+  useEffect(() => {
+    const restoreCovers = async () => {
+      const booksNeedingCover = audiobooks.filter(
+        (b) => (!b.coverUrl || b.coverUrl.trim() === '') && !coverRestorationAttemptedRef.current.has(b.id)
+      );
+      if (booksNeedingCover.length === 0) return;
+
+      // Mark as attempted BEFORE async work so the next render skips these IDs
+      booksNeedingCover.forEach((b) => coverRestorationAttemptedRef.current.add(b.id));
+
+      const updates = await Promise.all(
+        booksNeedingCover.map(async (b) => {
+          try {
+            const cover = await getAudioFile(b.id + '_cover');
+            if (cover && typeof cover === 'string' && cover.startsWith('data:')) {
+              return { id: b.id, coverUrl: cover };
+            }
+          } catch (_) {}
+          return null;
+        })
+      );
+
+      const validUpdates = updates.filter(Boolean);
+      if (validUpdates.length === 0) return;
+
+      setAudiobooks((prev) =>
+        prev.map((b) => {
+          const update = validUpdates.find((u) => u.id === b.id);
+          return update ? { ...b, coverUrl: update.coverUrl } : b;
+        })
+      );
+    };
+
+    restoreCovers();
+  }, [audiobooks]);
+
   // Audio Player State
   const [playerState, setPlayerState] = useState({
     book: null,
@@ -220,6 +259,10 @@ export const StoreProvider = ({ children }) => {
 
   // Ref to track latest preview boundaries without causing useEffect re-attaches
   const sampleBoundariesRef = useRef({ isSample: true, startTime: 0, endTime: 0 });
+
+  // Ref to track which book IDs have already had a cover restoration attempted
+  // (prevents infinite loop: setAudiobooks → useEffect → setAudiobooks → ...)
+  const coverRestorationAttemptedRef = useRef(new Set());
 
   // Global Audio HTML Element ref handler
   const [audioElement] = useState(new Audio());
