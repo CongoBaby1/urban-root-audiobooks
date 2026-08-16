@@ -66,17 +66,6 @@ export const Navbar = () => {
         {/* Navigation Tabs & Actions */}
         <div className="flex items-center gap-2 sm:gap-4">
           <nav className="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setActiveTab('store')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'store'
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Store</span>
-            </button>
 
             <button
               onClick={() => setActiveTab('library')}
