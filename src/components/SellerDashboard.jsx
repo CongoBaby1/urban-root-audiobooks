@@ -227,6 +227,12 @@ export const SellerDashboard = () => {
       await saveAudioFile(newBookId, uploadedAudioFile);
     }
 
+    // Also save the extracted WAV sample under the _sample key so each book
+    // has its own independent audio in IndexedDB that playTrack can retrieve
+    if (sampleAudioUrl && sampleAudioUrl.startsWith('data:')) {
+      await saveAudioFile(newBookId + '_sample', sampleAudioUrl);
+    }
+
     const liveAudioLink = sampleAudioUrl || (uploadedAudioFile ? URL.createObjectURL(uploadedAudioFile) : '');
 
     addAudiobookToCatalog({
@@ -253,6 +259,8 @@ export const SellerDashboard = () => {
     setDescription('');
     setUploadedFileName('');
     setUploadedAudioFile(null);
+    setSampleAudioUrl('');
+    setCoverUrl('https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80');
     setCoverSource('default');
     setIsFeatured(false);
     setIsBestseller(true);

@@ -507,21 +507,21 @@ export const StoreProvider = ({ children }) => {
 
   // Seller Dashboard Catalog Addition (Local State + Cloud Firestore Sync)
   const addAudiobookToCatalog = async (newBookData) => {
+    // Defaults come FIRST so that newBookData values (id, bestseller, featured, etc.) override them
     const newBook = {
-      ...newBookData,
       id: `ab-custom-${Date.now()}`,
       rating: 5.0,
       ratingCount: 1,
-      bestseller: false,
+      bestseller: true,
       featured: false,
       chapters: [
         { id: 1, title: 'Chapter 1: Introduction', duration: '30:00' },
         { id: 2, title: 'Chapter 2: Main Story', duration: '45:00' },
       ],
+      ...newBookData,
     };
 
     setAudiobooks((prev) => [newBook, ...prev]);
-    showToast(`Published "${newBook.title}" to store catalog!`, 'success');
 
     try {
       await setDoc(doc(db, 'audiobooks', newBook.id), sanitizeForFirestore(newBook));
