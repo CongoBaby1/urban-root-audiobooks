@@ -48,6 +48,15 @@ export const StoreProvider = ({ children }) => {
     }
   });
 
+  // Permanently deleted book IDs — persisted across refreshes so a Firestore
+  // snapshot can never resurrect a book the admin intentionally deleted.
+  const deletedBookIds = useState(() => {
+    try {
+      const saved = localStorage.getItem('audioverse_deleted_ids');
+      return new Set(JSON.parse(saved || '[]'));
+    } catch { return new Set(); }
+  })[0];
+
   // One-time migration: delete old placeholder demo books from Firestore
   useEffect(() => {
     const migrationKey = 'audioverse_placeholder_purge_v1';
@@ -65,7 +74,7 @@ export const StoreProvider = ({ children }) => {
         if (!snapshot.empty) {
           const firestoreBooks = snapshot.docs
             .map((d) => sanitizeBook({ id: d.id, ...d.data() }))
-            .filter((b) => b && b.title && b.title.trim() !== '' && !PLACEHOLDER_IDS.has(b.id));
+            .filter((b) => b && b.title && b.title.trim() !== '' && !PLACEHOLDER_IDS.has(b.id) && !deletedBookIds.has(b.id));
 
           if (firestoreBooks.length > 0) {
             setAudiobooks((prevLocal) => {
@@ -605,6 +614,11 @@ export const StoreProvider = ({ children }) => {
 
   const deleteAudiobookFromCatalog = async (id) => {
     setAudiobooks((prev) => prev.filter((book) => book.id !== id));
+
+    // Record deletion permanently so the Firestore snapshot can't resurrect the book
+    deletedBookIds.add(id);
+    try { localStorage.setItem('audioverse_deleted_ids', JSON.stringify([...deletedBookIds])); } catch (_) {}
+
     showToast('Audiobook removed from catalog.', 'info');
 
     try {
