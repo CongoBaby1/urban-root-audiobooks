@@ -269,6 +269,25 @@ export const StoreProvider = ({ children }) => {
     restoreCovers();
   }, [audiobooks]);
 
+  // Firestore Cover Sync: push local base64 covers to Firestore so any device
+  // (mobile, other browsers) can load them without needing this device's IndexedDB.
+  useEffect(() => {
+    const LIMIT = 500 * 1024;
+    const toSync = audiobooks.filter(
+      (b) =>
+        b.coverUrl &&
+        b.coverUrl.startsWith('data:') &&
+        b.coverUrl.length <= LIMIT &&
+        !coverSyncedToFirestoreRef.current.has(b.id)
+    );
+    if (toSync.length === 0) return;
+
+    toSync.forEach((b) => coverSyncedToFirestoreRef.current.add(b.id));
+    toSync.forEach((b) => {
+      setDoc(doc(db, 'audiobooks', b.id), { coverUrl: b.coverUrl }, { merge: true }).catch(() => {});
+    });
+  }, [audiobooks]);
+
   // Audio Player State
   const [playerState, setPlayerState] = useState({
     book: null,
@@ -289,6 +308,9 @@ export const StoreProvider = ({ children }) => {
   // Ref to track which book IDs have already had a cover restoration attempted
   // (prevents infinite loop: setAudiobooks → useEffect → setAudiobooks → ...)
   const coverRestorationAttemptedRef = useRef(new Set());
+
+  // Ref to track which book IDs have already had their cover pushed to Firestore
+  const coverSyncedToFirestoreRef = useRef(new Set());
 
   // Global Audio HTML Element ref handler
   const [audioElement] = useState(new Audio());
