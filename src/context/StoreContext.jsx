@@ -88,29 +88,28 @@ export const StoreProvider = ({ children }) => {
 
           if (firestoreBooks.length > 0) {
             setAudiobooks((prevLocal) => {
-              // Build a map of local books so we can fill in fields Firestore doesn't have
-              const localMap = new Map(prevLocal.map((b) => [b.id, b]));
-              const firestoreIds = new Set(firestoreBooks.map((b) => b.id));
+              // If no local books exist yet (fresh load / cleared storage),
+              // use Firestore as the source of truth.
+              if (prevLocal.length === 0) {
+                return firestoreBooks;
+              }
 
-              // Merge: Firestore is source of truth for text fields, but local fills in
-              // large binary fields (coverUrl base64, sampleAudioUrl) that weren't written to Firestore
-              const mergedFirestore = firestoreBooks.map((fb) => {
-                const local = localMap.get(fb.id);
-                if (!local) return fb;
-                return {
-                  ...fb,
-                  // Restore cover from local cache if Firestore doesn't have one
-                  coverUrl: fb.coverUrl || local.coverUrl || '',
-                  // Restore sample URL from local cache if Firestore doesn't have one
-                  sampleAudioUrl: fb.sampleAudioUrl || local.sampleAudioUrl || '',
-                };
-              });
+              // Otherwise: Firestore may only UPDATE books that already exist
+              // in local state. It cannot ADD books back that were deleted locally.
+              const firestoreMap = new Map(firestoreBooks.map((b) => [b.id, b]));
 
-              const remainingLocal = prevLocal
-                .filter((b) => !firestoreIds.has(b.id) && !PLACEHOLDER_IDS.has(b.id))
-                .map(sanitizeBook)
+              return prevLocal
+                .filter((b) => !PLACEHOLDER_IDS.has(b.id) && !deletedBookIds.has(b.id))
+                .map((localBook) => {
+                  const fb = firestoreMap.get(localBook.id);
+                  if (!fb) return sanitizeBook(localBook); // local-only book, keep as-is
+                  return sanitizeBook({
+                    ...fb,
+                    coverUrl: fb.coverUrl || localBook.coverUrl || '',
+                    sampleAudioUrl: fb.sampleAudioUrl || localBook.sampleAudioUrl || '',
+                  });
+                })
                 .filter(Boolean);
-              return [...mergedFirestore, ...remainingLocal];
             });
           }
         }
