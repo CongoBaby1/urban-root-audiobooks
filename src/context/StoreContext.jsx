@@ -256,6 +256,14 @@ export const StoreProvider = ({ children }) => {
           return update ? { ...b, coverUrl: update.coverUrl } : b;
         })
       );
+
+      // Write recovered covers back to Firestore so mobile devices can see them.
+      // sanitizeForFirestore will skip if the cover is too large (>500KB).
+      validUpdates.forEach(({ id, coverUrl }) => {
+        if (coverUrl && coverUrl.length <= 500 * 1024) {
+          setDoc(doc(db, 'audiobooks', id), { coverUrl }, { merge: true }).catch(() => {});
+        }
+      });
     };
 
     restoreCovers();
@@ -556,15 +564,27 @@ export const StoreProvider = ({ children }) => {
    */
   const sanitizeForFirestore = (data) => {
     const safe = { ...data };
-    // Strip ALL base64 data: URLs — they are too large for Firestore
-    // Only allow https:// cloud URLs (tiny, safe)
-    if (safe.coverUrl && safe.coverUrl.startsWith('data:')) delete safe.coverUrl;
+
+    // Always strip audio — WAV/MP3 base64 is always several MB
     if (safe.sampleAudioUrl && safe.sampleAudioUrl.startsWith('data:')) delete safe.sampleAudioUrl;
-    // Remove blob:// and audioObjectUrl — session-only, useless in Firestore
     if (safe.audioObjectUrl) delete safe.audioObjectUrl;
     if (safe.coverUrl && safe.coverUrl.startsWith('blob:')) delete safe.coverUrl;
+
+    // For cover images: keep in Firestore if small enough (<= 500 KB as base64 string).
+    // This lets mobile devices load covers directly from Firestore without needing
+    // desktop IndexedDB. Strip only if too large to avoid hitting the 1MB doc limit.
+    const COVER_FIRESTORE_LIMIT = 500 * 1024; // 500 KB
+    if (
+      safe.coverUrl &&
+      safe.coverUrl.startsWith('data:') &&
+      safe.coverUrl.length > COVER_FIRESTORE_LIMIT
+    ) {
+      delete safe.coverUrl;
+    }
+
     return safe;
   };
+
 
   // Seller Dashboard Catalog Addition (Local State + Cloud Firestore Sync)
   const addAudiobookToCatalog = async (newBookData) => {
