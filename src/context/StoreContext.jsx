@@ -6,6 +6,26 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firesto
 
 const StoreContext = createContext();
 
+// Compress a cover image to a small JPEG for Firestore storage (~20KB).
+// Mobile devices load this compressed version from Firestore directly.
+// Desktop keeps the full-quality version from localStorage/IndexedDB.
+const compressCoverForFirestore = (dataUrl) =>
+  new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 350;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+
 // IDs of the old placeholder demo books — purge them everywhere on load
 const PLACEHOLDER_IDS = new Set(['ab-1', 'ab-2', 'ab-3', 'ab-4', 'ab-5', 'ab-6']);
 
@@ -103,9 +123,12 @@ export const StoreProvider = ({ children }) => {
                 .map((localBook) => {
                   const fb = firestoreMap.get(localBook.id);
                   if (!fb) return sanitizeBook(localBook); // local-only book, keep as-is
-                  return sanitizeBook({
+                   return sanitizeBook({
                     ...fb,
-                    coverUrl: fb.coverUrl || localBook.coverUrl || '',
+                    coverUrl:
+                      (fb.coverUrl && fb.coverUrl.startsWith('https://')) ? fb.coverUrl :
+                      (localBook.coverUrl && localBook.coverUrl.startsWith('data:')) ? localBook.coverUrl :
+                      fb.coverUrl || localBook.coverUrl || '',
                     sampleAudioUrl: fb.sampleAudioUrl || localBook.sampleAudioUrl || '',
                   });
                 })
@@ -257,35 +280,44 @@ export const StoreProvider = ({ children }) => {
         })
       );
 
-      // Write recovered covers back to Firestore so mobile devices can see them.
-      // sanitizeForFirestore will skip if the cover is too large (>500KB).
-      validUpdates.forEach(({ id, coverUrl }) => {
-        if (coverUrl && coverUrl.length <= 500 * 1024) {
-          setDoc(doc(db, 'audiobooks', id), { coverUrl }, { merge: true }).catch(() => {});
-        }
-      });
+      // Write recovered covers back to Firestore (compressed) so mobile devices see them.
+      for (const { id, coverUrl } of validUpdates) {
+        compressCoverForFirestore(coverUrl)
+          .then((compressed) => {
+            if (compressed) setDoc(doc(db, 'audiobooks', id), { coverUrl: compressed }, { merge: true }).catch(() => {});
+          })
+          .catch(() => {});
+      }
     };
 
     restoreCovers();
   }, [audiobooks]);
 
-  // Firestore Cover Sync: push local base64 covers to Firestore so any device
-  // (mobile, other browsers) can load them without needing this device's IndexedDB.
+  // Firestore Cover Sync: compress and push local covers to Firestore so any
+  // device (mobile, other browsers) can load them without needing this device's IndexedDB.
   useEffect(() => {
-    const LIMIT = 500 * 1024;
-    const toSync = audiobooks.filter(
-      (b) =>
-        b.coverUrl &&
-        b.coverUrl.startsWith('data:') &&
-        b.coverUrl.length <= LIMIT &&
-        !coverSyncedToFirestoreRef.current.has(b.id)
-    );
-    if (toSync.length === 0) return;
+    const syncCovers = async () => {
+      const toSync = audiobooks.filter(
+        (b) =>
+          b.coverUrl &&
+          b.coverUrl.startsWith('data:image/') &&
+          !coverSyncedToFirestoreRef.current.has(b.id)
+      );
+      if (toSync.length === 0) return;
 
-    toSync.forEach((b) => coverSyncedToFirestoreRef.current.add(b.id));
-    toSync.forEach((b) => {
-      setDoc(doc(db, 'audiobooks', b.id), { coverUrl: b.coverUrl }, { merge: true }).catch(() => {});
-    });
+      // Mark immediately so repeated renders don't re-queue the same books
+      toSync.forEach((b) => coverSyncedToFirestoreRef.current.add(b.id));
+
+      for (const b of toSync) {
+        try {
+          const compressed = await compressCoverForFirestore(b.coverUrl);
+          if (compressed) {
+            await setDoc(doc(db, 'audiobooks', b.id), { coverUrl: compressed }, { merge: true });
+          }
+        } catch (_) {}
+      }
+    };
+    syncCovers();
   }, [audiobooks]);
 
   // Audio Player State
